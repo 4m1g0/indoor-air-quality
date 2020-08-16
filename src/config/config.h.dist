@@ -1,0 +1,10 @@
+
+const char* ID = "****";
+
+const char* WIFI_SSID = "SSID";
+const char* WIFI_PASSWORD = "password";
+
+const char* MQTT_USER = "user";
+const char* MQTT_PASSWORD = "password";
+
+const char* MQTT_ADDR = "****";
