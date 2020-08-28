@@ -6,6 +6,7 @@
 #include "SSD1306Wire.h"
 #include "config/config.h"
 #include "SparkFun_SCD30_Arduino_Library.h"
+#include "SdsDustSensor.h"
 
 // pin for pwm reading
 //#define CO2_IN D8 // orange 
@@ -14,8 +15,17 @@
 #define MH_Z19_RX D4  // D7 yellow
 #define MH_Z19_TX D0  // D6 striped yellow 
 
+#define MH_Z19B_RX D7  // D7 yellow
+#define MH_Z19B_TX D6  // D6 striped yellow 
+
+#define SDS011_RX D3  // 
+#define SDS011_TX D5  // 
+
 // Power 5V
 MHZ co2(MH_Z19_RX, MH_Z19_TX, MHZ14A);
+MHZ co2B(MH_Z19B_RX, MH_Z19B_TX, MHZ19B);
+
+SdsDustSensor sds(SDS011_RX, SDS011_TX);
 
 WiFiClient wifiClient;
 PubSubClient client(wifiClient);
@@ -76,6 +86,20 @@ void setup() {
     }
     Serial.println();
   }
+
+  if (co2B.isPreHeating()) {
+    Serial.print("Preheating...");
+    while (co2B.isPreHeating()) {
+      delay(100);
+      client.loop();
+    }
+    Serial.println();
+  }
+
+  sds.begin();
+  Serial.println(sds.queryFirmwareVersion().toString()); // prints firmware version
+  Serial.println(sds.setActiveReportingMode().toString()); // ensures sensor is in 'active' reporting mode
+  Serial.println(sds.setCustomWorkingPeriod(1).toString()); // ensures sensor has continuous working period - default but not recommended
 }
 
 void loop() {
@@ -84,6 +108,7 @@ void loop() {
   Serial.println(" s");
 
   int ppm_uart = co2.readCO2UART();
+  int ppmb_uart = co2B.readCO2UART();
   Serial.print("PPMuart: ");
 
   Serial.print(" ");
@@ -93,11 +118,19 @@ void loop() {
     Serial.print("n/a");
   }
 
+  Serial.print(" PPMB: ");
+  if (ppmb_uart > 0) {
+    Serial.print(ppmb_uart);
+  } else {
+    Serial.print("n/a");
+  }
+
   int ppm_pwm = 0;/*co2.readCO2PWM();
   Serial.print(", PPMpwm: ");
   Serial.print(ppm_pwm);*/
 
   int temperature = co2.getLastTemperature();
+  int temperatureB = co2B.getLastTemperature();
   Serial.print(", Temperature: ");
 
   if (temperature > 0) {
@@ -106,6 +139,11 @@ void loop() {
     Serial.println("n/a");
   }
 
+  if (temperatureB > 0) {
+    Serial.println(temperatureB);
+  } else {
+    Serial.println("n/a");
+  }
 
   int co2Sensirion = airSensor.getCO2();
   Serial.print("co2(ppm):");
@@ -121,6 +159,22 @@ void loop() {
 
   Serial.println();
 
+  PmResult pm = sds.readPm();
+
+  if (pm.isOk()) {
+    Serial.print("PM2.5 = ");
+    Serial.print(pm.pm25);
+    Serial.print(", PM10 = ");
+    Serial.println(pm.pm10);
+
+    // if you want to just print the measured values, you can use toString() method as well
+    Serial.println(pm.toString());
+  } else {
+    // notice that loop delay is set to 0.5s and some reads are not available
+    Serial.print("Could not read values from sensor, reason: ");
+    Serial.println(pm.statusToString());
+  }
+
 
   if (!client.connected()) { // Reconnect to MQTT if necesary
     reconnect();
@@ -130,31 +184,38 @@ void loop() {
 
   String json = "{\"ppmUART\":" + String(ppm_uart) +
                /*",\"ppmPWM\":" + String(ppm_pwm) + */
-               ",\"temp\":" + String(temperature) +
+              ",\"temp\":" + String(temperature) +
                ",\"ppmSensirion\":" + String(co2Sensirion) +
                ",\"tempSensirion\":" + String(tempSensirion) +
                ",\"humidity\":" + String(humidity) +
+               ",\"tempB\":" + String(temperatureB) +
+               ",\"co2B\":" + String(ppmb_uart) +
+               ",\"pm25\":" + String(pm.pm25) +
+               ",\"pm10\":" + String(pm.pm10) +
+               ",\"tStart\":" + String(millis()/1000) +
                "}";
   client.publish("co2/habitacion1", json.c_str());
 
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(128/2, 2, "Co2 Monitor");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(128/2, 0, "Air Monitor");
+  display.drawLine(30,11,98, 11);
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
-  String temperatureStr = "Temp: " + String(temperature) + String(" ºC") + String(" / ") + String(tempSensirion) + String(" ºC");
-  display.drawString(2, 22, temperatureStr);
+  String temperatureStr = "Temp: " + String(temperature) + String(" / ") + String(tempSensirion) + String(" / ") + String(temperatureB) + String(" ºC");
+  display.drawString(2, 12, temperatureStr);
 
-  String co2Str = "Co2: " + String(ppm_uart) + String(" PPM") + String(" / ") + String(co2Sensirion) + String(" PPM");
-  display.drawString(2, 36, co2Str);
+  String co2Str = /*"Co2: " + */String(ppm_uart) + String(" / ") + String(co2Sensirion) + String(" / ") + String(ppmb_uart) + String(" PPM");
+  display.drawString(2, 26, co2Str);
 
   String humidityStr = "Humidity: " + String(humidity) + String(" %");
-  display.drawString(2, 50, humidityStr);
+  display.drawString(2, 40, humidityStr);
+
+  String pmStr = "PM2.5: " + String(pm.pm25) + String(" PM10: ") + String(pm.pm10) + String("PPM");
+  display.drawString(2, 54, pmStr);
   display.display();
-
-
 
   Serial.println("\n------------------------------");
   for (int i = 0; i < 100; i++)
