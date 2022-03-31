@@ -1,13 +1,13 @@
 #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
-#include <MHZ.h>
-//#include <ESP8266WiFi.h>
+#include "MHZ19.h"
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include "SSD1306Wire.h"
 #include "config/config.h"
 #include "SparkFun_SCD30_Arduino_Library.h"
 #include "SdsDustSensor.h"
+#include <SoftwareSerial.h>
 
 // pin for pwm reading
 //#define CO2_IN D8 // orange 
@@ -23,8 +23,10 @@
 #define SDS011_TX D5  // 
 
 // Power 5V
-MHZ co2(MH_Z19_RX, MH_Z19_TX, MHZ14A);
-MHZ co2B(MH_Z19B_RX, MH_Z19B_TX, MHZ19B);
+MHZ19 co2;
+MHZ19 co2B;
+SoftwareSerial serialMHZ19(MH_Z19_RX, MH_Z19_TX);
+SoftwareSerial serialMHZ19B(MH_Z19B_RX, MH_Z19B_TX);
 
 SdsDustSensor sds(SDS011_RX, SDS011_TX);
 
@@ -81,23 +83,13 @@ void setup() {
       ;
   }
 
-  if (co2.isPreHeating()) {
-    Serial.print("Preheating...");
-    while (co2.isPreHeating()) {
-      delay(100);
-      client.loop();
-    }
-    Serial.println();
-  }
+  serialMHZ19.begin(9600);
+  co2.begin(serialMHZ19);
+  co2.autoCalibration();
 
-  if (co2B.isPreHeating()) {
-    Serial.print("Preheating...");
-    while (co2B.isPreHeating()) {
-      delay(100);
-      client.loop();
-    }
-    Serial.println();
-  }
+  serialMHZ19B.begin(9600);
+  co2B.begin(serialMHZ19B);
+  co2B.autoCalibration();
 
   sds.begin();
   Serial.println(sds.queryFirmwareVersion().toString()); // prints firmware version
@@ -110,8 +102,8 @@ void loop() {
   Serial.print(millis() / 1000);
   Serial.println(" s");
 
-  int ppm_uart = co2.readCO2UART();
-  int ppmb_uart = co2B.readCO2UART();
+  int ppm_uart = co2.getCO2();
+  int ppmb_uart = co2B.getCO2();
   Serial.print("PPMuart: ");
 
   Serial.print(" ");
@@ -132,8 +124,8 @@ void loop() {
   Serial.print(", PPMpwm: ");
   Serial.print(ppm_pwm);*/
 
-  int temperature = co2.getLastTemperature();
-  int temperatureB = co2B.getLastTemperature();
+  int temperature = co2.getTemperature();
+  int temperatureB = co2B.getTemperature();
   Serial.print(", Temperature: ");
 
   if (temperature > 0) {
