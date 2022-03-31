@@ -7,4 +7,7 @@ const char* WIFI_PASSWORD = "password";
 const char* MQTT_USER = "user";
 const char* MQTT_PASSWORD = "password";
 
-const char* MQTT_ADDR = "****";
+const char* MQTT_ADDR = "example.com";
+const uint16_t MQTT_PORT = 8883;
+
+static const char *fingerprint PROGMEM = "XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX XX";

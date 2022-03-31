@@ -1,7 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 #include <MHZ.h>
-#include <ESP8266WiFi.h>
+//#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include "SSD1306Wire.h"
 #include "config/config.h"
@@ -27,7 +28,7 @@ MHZ co2B(MH_Z19B_RX, MH_Z19B_TX, MHZ19B);
 
 SdsDustSensor sds(SDS011_RX, SDS011_TX);
 
-WiFiClient wifiClient;
+WiFiClientSecure wifiClient;
 PubSubClient client(wifiClient);
 void reconnect();
 
@@ -65,7 +66,9 @@ void setup() {
     delay(500);
   }
 
-  client.setServer(MQTT_ADDR, 1883);
+  //wifiClient.setCACert(DSTroot_CA);
+  wifiClient.setFingerprint(fingerprint);
+  client.setServer(MQTT_ADDR, MQTT_PORT); 
   delay(100);
   reconnect();
 
@@ -194,7 +197,7 @@ void loop() {
                ",\"pm10\":" + String(pm.pm10) +
                ",\"tStart\":" + String(millis()/1000) +
                "}";
-  client.publish("co2/habitacion1", json.c_str());
+  client.publish("iot/co2/habitacion1", json.c_str());
 
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER);
@@ -233,13 +236,14 @@ void reconnect() {
   
   lastConnection = millis();
 
-  wifiClient = WiFiClient();               // Wifi Client reconnect issue 4497 (https://github.com/esp8266/Arduino/issues/4497) (From Tasmota)
-  client.setClient(wifiClient);
+  //wifiClient = WiFiClientSecure();               // Wifi Client reconnect issue 4497 (https://github.com/esp8266/Arduino/issues/4497) (From Tasmota)
+  //client.setClient(wifiClient);
 
   if (client.connect(String(ESP.getChipId()).c_str(), MQTT_USER, MQTT_PASSWORD)) {
     Serial.println("MQTT connected");
   } 
   else {  
-    Serial.println("MQTT Connection failed");
+    Serial.print("MQTT Connection failed. Code: ");
+    Serial.println(client.state());
   }
 }
