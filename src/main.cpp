@@ -33,6 +33,8 @@ SdsDustSensor sds(SDS011_RX, SDS011_TX);
 WiFiClientSecure wifiClient;
 PubSubClient client(wifiClient);
 void reconnect();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void calibrateAllCo2();
 
 SSD1306Wire  display(0x3c, SDA, SCL);
 SCD30 airSensor;
@@ -49,7 +51,7 @@ void setup() {
   display.setFont(ArialMT_Plain_16);
   display.drawString(128/2, 20, "Co2 Monitor");
   display.setFont(ArialMT_Plain_10);
-  display.drawString(128/2, 50, "Preheating...");
+  display.drawString(128/2, 50, "Connecting...");
   display.display();
 
 
@@ -71,8 +73,18 @@ void setup() {
   //wifiClient.setCACert(DSTroot_CA);
   wifiClient.setFingerprint(fingerprint);
   client.setServer(MQTT_ADDR, MQTT_PORT); 
+  client.setCallback(mqttCallback);
   delay(100);
   reconnect();
+
+  display.clear();
+  display.flipScreenVertically();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(128/2, 20, "Co2 Monitor");
+  display.setFont(ArialMT_Plain_10);
+  display.drawString(128/2, 50, "Preparing...");
+  display.display();
 
   // enable debug to get addition information
   // co2.setDebug(true);
@@ -92,6 +104,7 @@ void setup() {
   co2B.autoCalibration();
 
   sds.begin();
+  delay(20000); // 20 seconds so the sensors have time to boot
   Serial.println(sds.queryFirmwareVersion().toString()); // prints firmware version
   Serial.println(sds.setActiveReportingMode().toString()); // ensures sensor is in 'active' reporting mode
   Serial.println(sds.setCustomWorkingPeriod(1).toString()); // ensures sensor has continuous working period - default but not recommended
@@ -233,9 +246,26 @@ void reconnect() {
 
   if (client.connect(String(ESP.getChipId()).c_str(), MQTT_USER, MQTT_PASSWORD)) {
     Serial.println("MQTT connected");
+    client.subscribe("iot/co2/calibrate");
   } 
   else {  
     Serial.print("MQTT Connection failed. Code: ");
     Serial.println(client.state());
+  }
+}
+
+void calibrateAllCo2()
+{
+  co2.calibrate();
+  co2B.calibrate();
+  airSensor.setForcedRecalibrationFactor(400);
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  char* resetTopic = "iot/co2/calibrate";
+  if (!strcmp(resetTopic, topic)) {
+    Serial.println("STARTING CALLIBRATION!");
+    Serial.println("Make sure the sensor has been outside for at least 20 min before running callibration");
+    calibrateAllCo2();
   }
 }
